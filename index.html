@@ -1,54 +1,26 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
-  <meta charset="UTF-8">
-  <title>QR Gateway</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>جاري التحميل...</title>
   <style>
-    body {
-      font-family: Arial;
-      background-color: #f9f9f9;
-      text-align: center;
-      padding: 50px;
-      direction: rtl;
-    }
-    #box {
-      background: #fff;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 0 12px rgba(0,0,0,0.1);
-      max-width: 400px;
-      margin: auto;
-    }
-    h2 { color: #333; }
-    p { font-size: 16px; color: #555; }
+    body { font-family: Arial; text-align: center; padding: 50px; background: #f4f4f4; }
+    h1 { font-size: 22px; }
+    .loading { font-size: 16px; color: gray; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <div id="box">
-    <h2>⏳ جاري تجهيز الرابط الذكي...</h2>
-    <p>🌍 الدولة: <span id="country">...</span></p>
-    <p>💻 نوع الجهاز: <span id="device">...</span></p>
-    <p>⏰ الوقت: <span id="time">...</span></p>
-    <p>🔗 سيتم توجيهك تلقائيًا خلال ثوانٍ...</p>
-  </div>
+  <h1>🔍 جاري معالجة بياناتك...</h1>
+  <div class="loading" id="status">يرجى الانتظار...</div>
 
   <script>
-    function getCountry(callback) {
-      fetch("https://ipapi.co/json/")
-        .then(response => response.json())
-        .then(data => {
-          const code = data && data.country_code ? data.country_code.toLowerCase() : "??";
-          callback(code);
-        })
-        .catch(() => callback("??"));
-    }
-
-    function detectDeviceType() {
-      const userAgent = navigator.userAgent.toLowerCase();
-      if (/android/.test(userAgent)) return "android";
-      if (/iphone|ipad|ipod/.test(userAgent)) return "ios";
-      if (/windows|mac|linux/.test(userAgent)) return "pc";
-      return "pc";
+    async function detectDevice() {
+      const ua = navigator.userAgent.toLowerCase();
+      if (/android/.test(ua)) return "android";
+      if (/iphone|ipad|ipod/.test(ua)) return "ios";
+      if (/windows|linux|mac/.test(ua)) return "pc";
+      return "unknown";
     }
 
     function getTimePeriod() {
@@ -58,46 +30,57 @@
       return "night";
     }
 
-    function fetchRedirectLink(country, time, device) {
-      const url = `https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec?country=${country}&time=${time}&device=${device}`;
-      fetch(url)
-        .then(res => res.text())
-        .then(link => {
-          if (link.startsWith("http")) {
-            setTimeout(() => { window.location.href = link; }, 2000); // بعد ثانيتين
-          } else {
-            document.getElementById("box").innerHTML = "<h2>⚠️ لم يتم العثور على رابط مناسب!</h2>";
-          }
-        })
-        .catch(() => {
-          document.getElementById("box").innerHTML = "<h2>❌ تعذر الاتصال بالسيرفر</h2>";
+    async function getCountry() {
+      try {
+        const res = await fetch("https://ipinfo.io/json?token=9b6d7272dd1191");
+        const data = await res.json();
+        return data.country?.toLowerCase() || "??";
+      } catch (e) {
+        return "??";
+      }
+    }
+
+    async function main() {
+      const device = await detectDevice();
+      const time = getTimePeriod();
+      const country = await getCountry();
+      const status = document.getElementById("status");
+      status.innerText = `🌍 الدولة: ${country} | 💻 الجهاز: ${device} | ⏰ الوقت: ${time}`;
+
+      // الخطوة 1: جلب الرابط المناسب من Google Sheets
+      const getUrl = "https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec";
+      const fullUrl = `${getUrl}?country=${country}&time=${time}&device=${device}`;
+
+      try {
+        const response = await fetch(fullUrl);
+        const finalLink = await response.text();
+
+        // الخطوة 2: إرسال البيانات إلى Google Sheets للتسجيل
+        await fetch(getUrl, {
+          method: "POST",
+          body: JSON.stringify({
+            country: country,
+            device: device,
+            time: time,
+            link: finalLink
+          }),
+          headers: { "Content-Type": "application/json" }
         });
+
+        // الخطوة 3: إعادة التوجيه بعد 2 ثانية
+        setTimeout(() => {
+          if (finalLink.startsWith("http")) {
+            window.location.href = finalLink;
+          } else {
+            status.innerText = "❌ لا يوجد رابط مطابق في قاعدة البيانات.";
+          }
+        }, 2000);
+      } catch (e) {
+        status.innerText = "❌ حدث خطأ أثناء المعالجة.";
+      }
     }
 
-    function sendToGoogleSheets(country, device, time) {
-      const link = window.location.href;
-      fetch("https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec", {
-        method: "POST",
-        body: JSON.stringify({ country, device, time, link }),
-        headers: {
-          "Content-Type": "application/json"
-        }
-      });
-    }
-
-    window.onload = function () {
-      getCountry(function (country) {
-        const device = detectDeviceType();
-        const time = getTimePeriod();
-
-        document.getElementById("country").textContent = country;
-        document.getElementById("device").textContent = device;
-        document.getElementById("time").textContent = time;
-
-        fetchRedirectLink(country, time, device);
-        sendToGoogleSheets(country, device, time);
-      });
-    };
+    main();
   </script>
 </body>
 </html>
