@@ -61,13 +61,14 @@
     }
 
     function getCountry(callback) {
-      fetch("https://ipinfo.io/json?token=ee46a73b5c59b0") // استخدم توكن مجاني من ipinfo.io
-        .then(response => response.json())
-        .then(data => {
-          callback(data.country.toLowerCase() || "??");
-        })
-        .catch(() => callback("??"));
-    }
+  fetch("https://api.country.is")
+    .then(response => response.json())
+    .then(data => {
+      callback(data.country.toLowerCase() || "??");
+    })
+    .catch(() => callback("??"));
+}
+
 
     function recordVisit(country, device, time, link) {
       fetch(SHEET_URL, {
