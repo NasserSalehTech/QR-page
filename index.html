@@ -1,28 +1,38 @@
 <!DOCTYPE html>
 <html lang="ar">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>جاري التحميل...</title>
+  <meta charset="UTF-8">
+  <title>انتظر لحظة...</title>
   <style>
-    body { font-family: Arial; text-align: center; padding: 50px; background: #f4f4f4; }
-    h1 { font-size: 22px; }
-    .loading { font-size: 16px; color: gray; margin-top: 10px; }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f8;
+      color: #333;
+      text-align: center;
+      padding-top: 100px;
+    }
+    .loader {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #3498db;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
   </style>
 </head>
 <body>
-  <h1>🔍 جاري معالجة بياناتك...</h1>
-  <div class="loading" id="status">يرجى الانتظار...</div>
+
+  <h2>🚀 يتم تجهيز الرابط المناسب لك...</h2>
+  <div class="loader"></div>
+  <p>يتم الآن تحديد موقعك ونوع جهازك وتوقيتك...</p>
 
   <script>
-    async function detectDevice() {
-      const ua = navigator.userAgent.toLowerCase();
-      if (/android/.test(ua)) return "android";
-      if (/iphone|ipad|ipod/.test(ua)) return "ios";
-      if (/windows|linux|mac/.test(ua)) return "pc";
-      return "unknown";
-    }
-
     function getTimePeriod() {
       const hour = new Date().getHours();
       if (hour >= 5 && hour < 12) return "morning";
@@ -30,57 +40,63 @@
       return "night";
     }
 
-    async function getCountry() {
-      try {
-        const res = await fetch("https://ipinfo.io/json?token=9b6d7272dd1191");
-        const data = await res.json();
-        return data.country?.toLowerCase() || "??";
-      } catch (e) {
-        return "??";
-      }
+    function detectDeviceType() {
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes("android")) return "android";
+      if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
+      if (ua.includes("windows") || ua.includes("mac") || ua.includes("linux")) return "pc";
+      return "pc";
     }
 
-    async function main() {
-      const device = await detectDevice();
+    function getCountryAndRedirect() {
+      const device = detectDeviceType();
       const time = getTimePeriod();
-      const country = await getCountry();
-      const status = document.getElementById("status");
-      status.innerText = `🌍 الدولة: ${country} | 💻 الجهاز: ${device} | ⏰ الوقت: ${time}`;
 
-      // الخطوة 1: جلب الرابط المناسب من Google Sheets
-      const getUrl = "https://script.google.com/macros/s/AKfycbzusaDC2Gi-KiqA_QX3qsTTQ-jKCH76RTpo-iaIDtvTa8OHVELvXx0CXV4qNb8h1X7p/exec";
-      const fullUrl = `${getUrl}?country=${country}&time=${time}&device=${device}`;
+      fetch("https://ipinfo.io/json?token=9b6d7272dd1191")
+        .then(res => res.json())
+        .then(data => {
+          const country = data.country ? data.country.toLowerCase() : "??";
 
-      try {
-        const response = await fetch(fullUrl);
-        const finalLink = await response.text();
-
-        // الخطوة 2: إرسال البيانات إلى Google Sheets للتسجيل
-        await fetch(getUrl, {
-          method: "POST",
-          body: JSON.stringify({
+          // جلب الرابط المناسب من Google Sheets
+          const params = new URLSearchParams({
             country: country,
-            device: device,
             time: time,
-            link: finalLink
-          }),
-          headers: { "Content-Type": "application/json" }
-        });
+            device: device
+          });
 
-        // الخطوة 3: إعادة التوجيه بعد 2 ثانية
-        setTimeout(() => {
-          if (finalLink.startsWith("http")) {
-            window.location.href = finalLink;
-          } else {
-            status.innerText = "❌ لا يوجد رابط مطابق في قاعدة البيانات.";
-          }
-        }, 2000);
-      } catch (e) {
-        status.innerText = "❌ حدث خطأ أثناء المعالجة.";
-      }
+          fetch(`https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec?${params}`)
+            .then(response => response.text())
+            .then(link => {
+              // تسجيل البيانات في Google Sheets
+              fetch("https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  country: country,
+                  device: device,
+                  time: time,
+                  link: link
+                })
+              });
+
+              // التوجيه بعد 2 ثانية
+              setTimeout(() => {
+                if (link && link.startsWith("http")) {
+                  window.location.href = link;
+                } else {
+                  document.body.innerHTML = `<h2>❌ لم يتم العثور على رابط مناسب</h2><p>يرجى التحقق من إعدادات Google Sheets.</p>`;
+                }
+              }, 2000);
+            });
+        })
+        .catch(err => {
+          document.body.innerHTML = `<h2>❌ حدث خطأ أثناء تحديد الموقع</h2><p>${err}</p>`;
+        });
     }
 
-    main();
+    // تنفيذ الوظيفة
+    getCountryAndRedirect();
   </script>
+
 </body>
 </html>
