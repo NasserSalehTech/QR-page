@@ -60,11 +60,11 @@
       return "night";
     }
 
-    function getCountry(callback) {
-  fetch("https://api.country.is")
+   function getCountry(callback) {
+  fetch("https://ipapi.co/json/")
     .then(response => response.json())
     .then(data => {
-      callback(data.country.toLowerCase() || "??");
+      callback(data.country_code.toLowerCase() || "??");
     })
     .catch(() => callback("??"));
 }
