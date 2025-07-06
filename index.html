@@ -1,29 +1,88 @@
 <!DOCTYPE html>
-<html>
+<html lang="ar">
 <head>
-  <meta charset="utf-8">
-  <title>QR Redirect</title>
-  <script>
-    async function init() {
-      const params = new URLSearchParams(window.location.search);
-      const country = params.get('country');
-      const device = params.get('device');
-      const time = params.get('time');
-      const redirectUrl = params.get('redirect');
-
-      const sheetUrl = "https://script.google.com/macros/s/AKfycbyeycf6Ig-h-Gfqn1PkOSiZKu7uFplz_BuXWah5gDH2XnuHqhJsOBMMd5-sbzB6gCBs/exec";
-
-      await fetch(sheetUrl, {
-        method: "POST",
-        body: JSON.stringify({ country, device, time, link: redirectUrl }),
-      }).catch(console.error);
-
-      window.location.href = redirectUrl;
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>جارٍ المعالجة...</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f6f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #333;
     }
-    init();
-  </script>
+    h1 {
+      font-size: 22px;
+      margin-bottom: 10px;
+    }
+    p {
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
 </head>
 <body>
-  <p>🔁 جاري التوجيه...</p>
+  <h1>🔍 جارٍ التحقق...</h1>
+  <p>يرجى الانتظار لحظات...</p>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjO2jsY9jChR_uv_s8uyI90qfBrzNJRRsvmwyOug2sws-cRHOBcPxi3A83aPDECrSl/exec";
+
+    function getDeviceType() {
+      const ua = navigator.userAgent.toLowerCase();
+      if (ua.includes("android")) return "android";
+      if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ios")) return "ios";
+      return "pc";
+    }
+
+    function getTimePeriod() {
+      const hour = new Date().getHours();
+      if (hour >= 5 && hour < 12) return "morning";
+      if (hour >= 12 && hour < 20) return "evening";
+      return "night";
+    }
+
+    function getCountry(callback) {
+      fetch("https://ipinfo.io/json?token=56aaac5930c13e")  // استخدم توكنك الخاص لو أردت
+        .then(res => res.json())
+        .then(data => callback(data.country ? data.country.toLowerCase() : "??"))
+        .catch(() => callback("??"));
+    }
+
+    function logToSheet(country, device, time) {
+      fetch(SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ country, device, time, link: "qr-page" }),
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    function fetchRedirectLink(country, device, time) {
+      const params = new URLSearchParams({ country, device, time });
+      return fetch(`${SCRIPT_URL}?${params.toString()}`)
+        .then(res => res.text())
+        .catch(() => null);
+    }
+
+    const device = getDeviceType();
+    const time = getTimePeriod();
+
+    getCountry(async (country) => {
+      logToSheet(country, device, time);  // يسجل أولاً في الورقة1
+      const link = await fetchRedirectLink(country, device, time); // يبحث في ورقة Links
+      if (link && link.startsWith("http")) {
+        setTimeout(() => {
+          window.location.href = link;
+        }, 2000);
+      } else {
+        document.querySelector("h1").innerText = "❌ لم يتم العثور على الرابط.";
+        document.querySelector("p").innerText = "يرجى التواصل مع الدعم.";
+      }
+    });
+  </script>
 </body>
 </html>
